@@ -21,11 +21,11 @@ import net.sqlcipher.database.SQLiteDatabase.CursorFactory;
 
 /**
  * A cursor driver that uses the given query directly.
- * 
+ *
  * @hide
  */
 public class SQLiteDirectCursorDriver implements SQLiteCursorDriver {
-    private String mEditTable; 
+    private String mEditTable;
     private SQLiteDatabase mDatabase;
     private Cursor mCursor;
     private String mSql;
@@ -37,15 +37,25 @@ public class SQLiteDirectCursorDriver implements SQLiteCursorDriver {
         mSql = sql;
     }
 
-    public Cursor query(CursorFactory factory, Object[] args) {
-        SQLiteQuery query = new SQLiteQuery(mDatabase, mSql, 0, args);
+    public Cursor query(CursorFactory factory, Object[] selectionArgs) {
+        // Compile the query
+        SQLiteQuery query = new SQLiteQuery(mDatabase, mSql, 0, selectionArgs);
+
         try {
-            query.bindArguments(args);
+            // Arg binding
+            int numArgs = selectionArgs == null ? 0 : selectionArgs.length;
+            for (int i = 0; i < numArgs; i++) {
+                query.bindObject(i + 1, selectionArgs[i]);
+            }
+
+            // Create the cursor
             if (factory == null) {
                 mCursor = new SQLiteCursor(mDatabase, this, mEditTable, query);
+
             } else {
                 mCursor = factory.newCursor(mDatabase, this, mEditTable, query);
             }
+
             mQuery = query;
             query = null;
             return mCursor;
@@ -69,7 +79,7 @@ public class SQLiteDirectCursorDriver implements SQLiteCursorDriver {
             // Create the cursor
             if (factory == null) {
                 mCursor = new SQLiteCursor(mDatabase, this, mEditTable, query);
-                
+
             } else {
                 mCursor = factory.newCursor(mDatabase, this, mEditTable, query);
             }
@@ -91,6 +101,13 @@ public class SQLiteDirectCursorDriver implements SQLiteCursorDriver {
         final int numArgs = bindArgs.length;
         for (int i = 0; i < numArgs; i++) {
             mQuery.bindString(i + 1, bindArgs[i]);
+        }
+    }
+
+    public void setBindArguments(Object[] bindArgs) {
+        final int numArgs = bindArgs.length;
+        for (int i = 0; i < numArgs; i++) {
+            mQuery.bindObject(i + 1, bindArgs[i]);
         }
     }
 

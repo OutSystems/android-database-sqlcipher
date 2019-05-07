@@ -15,33 +15,37 @@
  */
 
 package net.sqlcipher.database;
-import net.sqlcipher.*;
 
 import android.os.SystemClock;
 import android.util.Log;
+import net.sqlcipher.CursorWindow;
 
 /**
  * A SQLite program that represents a query that reads the resulting rows into a CursorWindow.
  * This class is used by SQLiteCursor and isn't useful itself.
- *
+ * <p>
  * SQLiteQuery is not internally synchronized so code using a SQLiteQuery from multiple
  * threads should perform its own synchronization when using the SQLiteQuery.
  */
 public class SQLiteQuery extends SQLiteProgram {
     private static final String TAG = "Cursor";
 
-    /** The index of the unbound OFFSET parameter */
+    /**
+     * The index of the unbound OFFSET parameter
+     */
     private int mOffsetIndex;
 
-    /** Args to bind on requery */
+    /**
+     * Args to bind on requery
+     */
     private String[] mBindArgs;
     private Object[] mObjectBindArgs;
 
     /**
      * Create a persistent query object.
      *
-     * @param db The database that this query object is associated with
-     * @param query The SQL string for this query.
+     * @param db          The database that this query object is associated with
+     * @param query       The SQL string for this query.
      * @param offsetIndex The 1-based index to the OFFSET parameter,
      */
     /* package */ SQLiteQuery(SQLiteDatabase db, String query, int offsetIndex, String[] bindArgs) {
@@ -66,7 +70,7 @@ public class SQLiteQuery extends SQLiteProgram {
      * @return number of total rows in the query
      */
     /* package */ int fillWindow(CursorWindow window,
-            int maxRead, int lastPos) {
+                                 int maxRead, int lastPos) {
         long timeStart = SystemClock.uptimeMillis();
         mDatabase.lock();
         try {
@@ -84,7 +88,7 @@ public class SQLiteQuery extends SQLiteProgram {
                     Log.d(TAG, "fillWindow(): " + mSql);
                 }
                 return numRows;
-            } catch (IllegalStateException e){
+            } catch (IllegalStateException e) {
                 // simply ignore it
                 return 0;
             } catch (SQLiteDatabaseCorruptException e) {
@@ -143,12 +147,8 @@ public class SQLiteQuery extends SQLiteProgram {
         if (mBindArgs != null) {
             int len = mBindArgs.length;
             try {
-                if(mObjectBindArgs != null) {
-                    bindArguments(mObjectBindArgs);
-                } else {
-                    for (int i = 0; i < len; i++) {
-                        super.bindString(i + 1, mBindArgs[i]);
-                    }
+                for (int i = 0; i < len; i++) {
+                    this.bindObject(i + 1, mBindArgs[i]);
                 }
             } catch (SQLiteMisuseException e) {
                 StringBuilder errMsg = new StringBuilder("mSql " + mSql);
@@ -164,59 +164,52 @@ public class SQLiteQuery extends SQLiteProgram {
         }
     }
 
+    public void bindObject(int index, Object argValue) {
+        if (argValue instanceof Double) {
+            super.bindDouble(index, (Double) argValue);
+        } else if (argValue instanceof Long) {
+            super.bindLong(index, (Long) argValue);
+        } else if (argValue == null) {
+            super.bindNull(index);
+        } else {
+            super.bindString(index, (String) argValue);
+        }
+    }
+
     @Override
     public void bindNull(int index) {
         mBindArgs[index - 1] = null;
-        if (!mClosed) super.bindNull(index);
+        if (!mClosed) {
+            super.bindNull(index);
+        }
     }
 
     @Override
     public void bindLong(int index, long value) {
         mBindArgs[index - 1] = Long.toString(value);
-        if (!mClosed) super.bindLong(index, value);
+        if (!mClosed) {
+            super.bindLong(index, value);
+        }
     }
 
     @Override
     public void bindDouble(int index, double value) {
         mBindArgs[index - 1] = Double.toString(value);
-        if (!mClosed) super.bindDouble(index, value);
+        if (!mClosed) {
+            super.bindDouble(index, value);
+        }
     }
 
     @Override
     public void bindString(int index, String value) {
         mBindArgs[index - 1] = value;
-        if (!mClosed) super.bindString(index, value);
-    }
-
-    public void bindArguments(Object[] args){
-        if(args != null && args.length > 0){
-            for(int i = 0; i < args.length; i++){
-                Object value = args[i];
-                if(value == null){
-                    bindNull(i + 1);
-                } else if (value instanceof Double) {
-                    bindDouble(i + 1, (Double)value);
-                } else if (value instanceof Float) {
-                    float number = ((Number)value).floatValue();
-                    bindDouble(i + 1, Double.valueOf(number));
-                } else if (value instanceof Long) {
-                    bindLong(i + 1, (Long)value);
-                } else if(value instanceof Integer) {
-                    int number = ((Number) value).intValue();
-                    bindLong(i + 1, Long.valueOf(number));
-                } else if (value instanceof Boolean) {
-                    bindLong(i + 1, (Boolean)value ? 1 : 0);
-                } else if (value instanceof byte[]) {
-                    bindBlob(i + 1, (byte[])value);
-                } else {
-                    bindString(i + 1, value.toString());
-                }
-            }
+        if (!mClosed) {
+            super.bindString(index, value);
         }
     }
 
-    private final native int native_fill_window(CursorWindow window, 
-            int startPos, int offsetParam, int maxRead, int lastPos);
+    private final native int native_fill_window(CursorWindow window,
+                                                int startPos, int offsetParam, int maxRead, int lastPos);
 
     private final native int native_column_count();
 

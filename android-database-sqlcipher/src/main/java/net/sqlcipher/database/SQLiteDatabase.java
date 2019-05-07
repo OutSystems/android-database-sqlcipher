@@ -137,9 +137,9 @@ public class SQLiteDatabase extends SQLiteClosable {
           for(byte data : keyMaterial) {
             data = 0;
           }
-        }     
+        }
     }
-  
+
     private static void loadICUData(Context context, File workingDir) {
       OutputStream out = null;
       ZipInputStream in = null;
@@ -1246,7 +1246,7 @@ public class SQLiteDatabase extends SQLiteClosable {
      *
      * @return a SQLiteDatabase object, or null if the database can't be created
      *
-     * @throws SQLiteException if the database cannot be opened 
+     * @throws SQLiteException if the database cannot be opened
      */
     public static SQLiteDatabase create(CursorFactory factory, String password) {
         // This is a magic string with special meaning for SQLite.
@@ -1266,7 +1266,7 @@ public class SQLiteDatabase extends SQLiteClosable {
      *
      * @return a SQLiteDatabase object, or null if the database can't be created
      *
-     * @throws SQLiteException if the database cannot be opened 
+     * @throws SQLiteException if the database cannot be opened
      */
     public static SQLiteDatabase create(CursorFactory factory, char[] password) {
         return openDatabase(MEMORY, password, factory, CREATE_IF_NECESSARY);
@@ -1629,10 +1629,10 @@ public class SQLiteDatabase extends SQLiteClosable {
      * @see Cursor
      */
     public Cursor query(boolean distinct, String table, String[] columns,
-                        String selection, String[] selectionArgs, String groupBy,
+                        String selection, Object[] selectionArgs, String groupBy,
                         String having, String orderBy, String limit) {
         return queryWithFactory(null, distinct, table, columns, selection, selectionArgs,
-                                groupBy, having, orderBy, limit);
+                groupBy, having, orderBy, limit);
     }
 
     /**
@@ -1671,16 +1671,16 @@ public class SQLiteDatabase extends SQLiteClosable {
      */
     public Cursor queryWithFactory(CursorFactory cursorFactory,
                                    boolean distinct, String table, String[] columns,
-                                   String selection, String[] selectionArgs, String groupBy,
+                                   String selection, Object[] selectionArgs, String groupBy,
                                    String having, String orderBy, String limit) {
         if (!isOpen()) {
             throw new IllegalStateException("database not open");
         }
         String sql = SQLiteQueryBuilder.buildQueryString(
-                                                         distinct, table, columns, selection, groupBy, having, orderBy, limit);
+                distinct, table, columns, selection, groupBy, having, orderBy, limit);
 
         return rawQueryWithFactory(
-                                   cursorFactory, sql, selectionArgs, findEditTable(table));
+                cursorFactory, sql, selectionArgs, findEditTable(table));
     }
 
     /**
@@ -1695,7 +1695,7 @@ public class SQLiteDatabase extends SQLiteClosable {
      *            will return all rows for the given table.
      * @param selectionArgs You may include ?s in selection, which will be
      *         replaced by the values from selectionArgs, in order that they
-     *         appear in the selection. The values will be bound as Strings.
+     *         appear in the selection.
      * @param groupBy A filter declaring how to group rows, formatted as an SQL
      *            GROUP BY clause (excluding the GROUP BY itself). Passing null
      *            will cause the rows to not be grouped.
@@ -1717,11 +1717,11 @@ public class SQLiteDatabase extends SQLiteClosable {
      * @see Cursor
      */
     public Cursor query(String table, String[] columns, String selection,
-                        String[] selectionArgs, String groupBy, String having,
+                        Object[] selectionArgs, String groupBy, String having,
                         String orderBy) {
 
         return query(false, table, columns, selection, selectionArgs, groupBy,
-                     having, orderBy, null /* limit */);
+                having, orderBy, null /* limit */);
     }
 
     /**
@@ -1736,7 +1736,7 @@ public class SQLiteDatabase extends SQLiteClosable {
      *            will return all rows for the given table.
      * @param selectionArgs You may include ?s in selection, which will be
      *         replaced by the values from selectionArgs, in order that they
-     *         appear in the selection. The values will be bound as Strings.
+     *         appear in the selection.
      * @param groupBy A filter declaring how to group rows, formatted as an SQL
      *            GROUP BY clause (excluding the GROUP BY itself). Passing null
      *            will cause the rows to not be grouped.
@@ -1760,11 +1760,11 @@ public class SQLiteDatabase extends SQLiteClosable {
      * @see Cursor
      */
     public Cursor query(String table, String[] columns, String selection,
-                        String[] selectionArgs, String groupBy, String having,
+                        Object[] selectionArgs, String groupBy, String having,
                         String orderBy, String limit) {
 
         return query(false, table, columns, selection, selectionArgs, groupBy,
-                     having, orderBy, limit);
+                having, orderBy, limit);
     }
 
     /**
@@ -1772,8 +1772,7 @@ public class SQLiteDatabase extends SQLiteClosable {
      *
      * @param sql the SQL query. The SQL string must not be ; terminated
      * @param selectionArgs You may include ?s in where clause in the query,
-     *     which will be replaced by the values from selectionArgs. The
-     *     values will be bound as Strings.
+     *     which will be replaced by the values from selectionArgs.
      *
      * @return A {@link Cursor} object, which is positioned before the first entry. Note that
      * {@link Cursor}s are not synchronized, see the documentation for more details.
@@ -1781,55 +1780,8 @@ public class SQLiteDatabase extends SQLiteClosable {
      * @throws SQLiteException if there is an issue executing the sql or the SQL string is invalid
      * @throws IllegalStateException if the database is not open
      */
-    public Cursor rawQuery(String sql, String[] selectionArgs) {
+    public Cursor rawQuery(String sql, Object[] selectionArgs) {
         return rawQueryWithFactory(null, sql, selectionArgs, null);
-    }
-
-
-      /**
-     * Runs the provided SQL and returns a {@link Cursor} over the result set.
-     *
-     * @param sql the SQL query. The SQL string must not be ; terminated
-     * @param args You may include ?s in where clause in the query,
-     *     which will be replaced by the values from args. The
-     *     values will be bound by their type.
-     *
-     * @return A {@link Cursor} object, which is positioned before the first entry. Note that
-     * {@link Cursor}s are not synchronized, see the documentation for more details.
-     *
-     * @throws SQLiteException if there is an issue executing the sql or the SQL string is invalid
-     * @throws IllegalStateException if the database is not open
-     */
-    public Cursor rawQuery(String sql, Object[] args) {
-        if (!isOpen()) {
-            throw new IllegalStateException("database not open");
-        }
-        long timeStart = 0;
-        if (Config.LOGV || mSlowQueryThreshold != -1) {
-            timeStart = System.currentTimeMillis();
-        }
-        SQLiteDirectCursorDriver driver = new SQLiteDirectCursorDriver(this, sql, null);
-        Cursor cursor = null;
-        try {
-            cursor = driver.query(mFactory, args);
-        } finally {
-            if (Config.LOGV || mSlowQueryThreshold != -1) {
-                // Force query execution
-                int count = -1;
-                if (cursor != null) {
-                    count = cursor.getCount();
-                }
-
-                long duration = System.currentTimeMillis() - timeStart;
-
-                if (Config.LOGV || duration >= mSlowQueryThreshold) {
-                    Log.v(TAG,
-                          "query (" + duration + " ms): " + driver.toString() +
-                          ", args are <redacted>, count is " + count);
-                }
-            }
-        }
-        return new CrossProcessCursorWrapper(cursor);
     }
 
     /**
@@ -1838,8 +1790,7 @@ public class SQLiteDatabase extends SQLiteClosable {
      * @param cursorFactory the cursor factory to use, or null for the default factory
      * @param sql the SQL query. The SQL string must not be ; terminated
      * @param selectionArgs You may include ?s in where clause in the query,
-     *     which will be replaced by the values from selectionArgs. The
-     *     values will be bound as Strings.
+     *     which will be replaced by the values from selectionArgs.
      * @param editTable the name of the first table, which is editable
      *
      * @return A {@link Cursor} object, which is positioned before the first entry. Note that
@@ -1849,8 +1800,8 @@ public class SQLiteDatabase extends SQLiteClosable {
      * @throws IllegalStateException if the database is not open
      */
     public Cursor rawQueryWithFactory(
-                                      CursorFactory cursorFactory, String sql, String[] selectionArgs,
-                                      String editTable) {
+            CursorFactory cursorFactory, String sql, Object[] selectionArgs,
+            String editTable) {
         if (!isOpen()) {
             throw new IllegalStateException("database not open");
         }
@@ -1865,8 +1816,8 @@ public class SQLiteDatabase extends SQLiteClosable {
         Cursor cursor = null;
         try {
             cursor = driver.query(
-                                  cursorFactory != null ? cursorFactory : mFactory,
-                                  selectionArgs);
+                    cursorFactory != null ? cursorFactory : mFactory,
+                    selectionArgs);
         } finally {
             if (Config.LOGV || mSlowQueryThreshold != -1) {
 
@@ -1880,8 +1831,8 @@ public class SQLiteDatabase extends SQLiteClosable {
 
                 if (Config.LOGV || duration >= mSlowQueryThreshold) {
                     Log.v(TAG,
-                          "query (" + duration + " ms): " + driver.toString() +
-                          ", args are <redacted>, count is " + count);
+                            "query (" + duration + " ms): " + driver.toString() +
+                                    ", args are <redacted>, count is " + count);
                 }
             }
         }
@@ -1895,8 +1846,7 @@ public class SQLiteDatabase extends SQLiteClosable {
      * when the later batches are ready.
      * @param sql the SQL query. The SQL string must not be ; terminated
      * @param selectionArgs You may include ?s in where clause in the query,
-     *     which will be replaced by the values from selectionArgs. The
-     *     values will be bound as Strings.
+     *     which will be replaced by the values from selectionArgs.
      * @param initialRead set the initial count of items to read from the cursor
      * @param maxRead set the count of items to read on each iteration after the first
      * @return A {@link Cursor} object, which is positioned before the first entry. Note that
@@ -1906,11 +1856,11 @@ public class SQLiteDatabase extends SQLiteClosable {
      * hidden.
      * @hide
      */
-    public Cursor rawQuery(String sql, String[] selectionArgs,
+    public Cursor rawQuery(String sql, Object[] selectionArgs,
                            int initialRead, int maxRead) {
-      net.sqlcipher.CursorWrapper cursorWrapper = (net.sqlcipher.CursorWrapper)rawQueryWithFactory(null, sql, selectionArgs, null);
-      ((SQLiteCursor)cursorWrapper.getWrappedCursor()).setLoadStyle(initialRead, maxRead);
-      return cursorWrapper;
+        net.sqlcipher.CursorWrapper cursorWrapper = (net.sqlcipher.CursorWrapper)rawQueryWithFactory(null, sql, selectionArgs, null);
+        ((SQLiteCursor)cursorWrapper.getWrappedCursor()).setLoadStyle(initialRead, maxRead);
+        return cursorWrapper;
     }
 
     /**
@@ -2411,7 +2361,7 @@ public class SQLiteDatabase extends SQLiteClosable {
     final byte[] keyMaterial = getBytes(password);
     dbopen(mPath, mFlags);
     try {
-      
+
       keyDatabase(hook, new Runnable() {
           public void run() {
             if(keyMaterial != null && keyMaterial.length > 0) {
@@ -2420,7 +2370,7 @@ public class SQLiteDatabase extends SQLiteClosable {
           }
         });
       shouldCloseConnection = false;
-      
+
     } catch(RuntimeException ex) {
 
       if(containsNull(password)) {
@@ -2452,7 +2402,7 @@ public class SQLiteDatabase extends SQLiteClosable {
         }
       }
     }
-    
+
   }
 
   private boolean containsNull(char[] data) {
@@ -2468,7 +2418,7 @@ public class SQLiteDatabase extends SQLiteClosable {
     }
     return status;
   }
-  
+
   private void keyDatabase(SQLiteDatabaseHook databaseHook, Runnable keyOperation) {
     if(databaseHook != null) {
       databaseHook.preKey(this);
@@ -2483,7 +2433,7 @@ public class SQLiteDatabase extends SQLiteClosable {
       mTimeOpened = getTime();
     }
     try {
-      Cursor cursor = rawQuery("select count(*) from sqlite_master;", new String[]{});
+      Cursor cursor = rawQuery("select count(*) from sqlite_master;", new Object[]{});
       if(cursor != null){
         cursor.moveToFirst();
         int count = cursor.getInt(0);
@@ -2909,7 +2859,7 @@ public class SQLiteDatabase extends SQLiteClosable {
     private native int native_status(int operation, boolean reset);
 
     private native void native_key(char[] key) throws SQLException;
-  
+
     private native void native_rekey(String key) throws SQLException;
 
   private native void key(byte[] key) throws SQLException;
