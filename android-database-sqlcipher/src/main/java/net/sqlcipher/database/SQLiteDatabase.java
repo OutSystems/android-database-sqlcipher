@@ -16,48 +16,29 @@
 
 package net.sqlcipher.database;
 
-import net.sqlcipher.Cursor;
-import net.sqlcipher.CrossProcessCursorWrapper;
-import net.sqlcipher.DatabaseUtils;
-import net.sqlcipher.DatabaseErrorHandler;
-import net.sqlcipher.DefaultDatabaseErrorHandler;
-import net.sqlcipher.SQLException;
-import net.sqlcipher.database.SQLiteDebug.DbStats;
-import net.sqlcipher.database.SQLiteDatabaseHook;
-
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.UnsupportedEncodingException;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.Charset;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.WeakHashMap;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.regex.Pattern;
-import java.util.zip.ZipInputStream;
-
 import android.content.ContentValues;
-
 import android.content.Context;
-
 import android.os.Debug;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Config;
 import android.util.Log;
 import android.util.Pair;
+import net.sqlcipher.*;
+import net.sqlcipher.database.SQLiteDebug.DbStats;
 
-import java.io.UnsupportedEncodingException;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.regex.Pattern;
+import java.util.zip.ZipInputStream;
 
 /**
  * Exposes methods to manage a SQLCipher database.
@@ -2356,19 +2337,25 @@ public class SQLiteDatabase extends SQLiteClosable {
         mErrorHandler = errorHandler;
     }
 
-  private void openDatabaseInternal(final char[] password, SQLiteDatabaseHook hook) {
+  private void openDatabaseInternal(final char[] password, SQLiteDatabaseHook hook, final boolean retryLegacy) {
     boolean shouldCloseConnection = true;
     final byte[] keyMaterial = getBytes(password);
     dbopen(mPath, mFlags);
     try {
-
       keyDatabase(hook, new Runnable() {
-          public void run() {
-            if(keyMaterial != null && keyMaterial.length > 0) {
-              key(keyMaterial);
-            }
+        public void run() {
+          if (retryLegacy) {
+            legacy_key_char(password);
+          } else if (keyMaterial != null && keyMaterial.length > 0) {
+            key(keyMaterial);
           }
-        });
+        }
+      });
+      if (retryLegacy) {
+        //Fix password with new rekey method
+        Log.d(TAG,"Changing Password with new key method");
+        changePassword(password);
+      }
       shouldCloseConnection = false;
 
     } catch(RuntimeException ex) {
@@ -2386,7 +2373,14 @@ public class SQLiteDatabase extends SQLiteClosable {
         }
         shouldCloseConnection = false;
       } else {
-        throw ex;
+        if (!retryLegacy) {
+          Log.d(TAG,"Trying to open database with legacy_key method");
+          //try to open database with legacy key method
+          openDatabaseInternal(password, hook, true);
+          shouldCloseConnection = false;
+        } else {
+          throw ex;
+        }
       }
 
     } finally {
@@ -2402,10 +2396,13 @@ public class SQLiteDatabase extends SQLiteClosable {
         }
       }
     }
-
   }
 
-  private boolean containsNull(char[] data) {
+    private void openDatabaseInternal(final char[] password, SQLiteDatabaseHook hook){
+        openDatabaseInternal(password,  hook,false);
+    }
+
+    private boolean containsNull(char[] data) {
     char defaultValue = '\u0000';
     boolean status = false;
     if(data != null && data.length > 0) {
@@ -2863,6 +2860,7 @@ public class SQLiteDatabase extends SQLiteClosable {
     private native void native_rekey(String key) throws SQLException;
 
   private native void key(byte[] key) throws SQLException;
+  private native void legacy_key_char(char[] key) throws SQLException;
   private native void key_mutf8(char[] key) throws SQLException;
   private native void rekey(byte[] key) throws SQLException;
 }

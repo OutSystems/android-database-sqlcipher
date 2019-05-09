@@ -152,7 +152,27 @@ namespace sqlcipher {
     env->ReleaseCharArrayElements(jKey, jKeyChar, JNI_ABORT);
     env->ReleaseStringUTFChars(key, password);
   }
-    
+
+  void native_legacy_key_char(JNIEnv* env, jobject object, jcharArray jKey) {
+    int rc;
+    int idx;
+    sqlite3 *handle = (sqlite3 *)env->GetLongField(object, offset_db_handle);
+    jchar *key = env->GetCharArrayElements(jKey, 0);
+    jsize sz = env->GetArrayLength(jKey);
+    char password[sz + 1];
+    for(idx = 0; idx < sz; idx++){
+      password[idx] = (char)key[idx];
+    }
+    password[sz] = '\0';
+    if(sz > 0){
+      rc = sqlite3_key(handle, password, sz);
+      if(rc != SQLITE_OK){
+        throw_sqlite3_exception(env, handle);
+      }
+    }
+    env->ReleaseCharArrayElements(jKey, key, 0);
+  }
+
   void native_rawExecSQL(JNIEnv* env, jobject object, jstring sql)
   {
     sqlite3 * handle = (sqlite3 *)env->GetLongField(object, offset_db_handle);
@@ -542,6 +562,7 @@ namespace sqlcipher {
       {"key_mutf8", "([C)V", (void *)native_key_mutf8},
       {"key", "([B)V", (void *)native_key},
       {"rekey", "([B)V", (void *)native_rekey},
+      {"legacy_key_char", "([C)V", (void *)native_legacy_key_char},
     };
 
   int register_android_database_SQLiteDatabase(JNIEnv *env)
