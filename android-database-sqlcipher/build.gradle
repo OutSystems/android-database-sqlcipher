@@ -1,0 +1,46 @@
+apply plugin: "com.android.library"
+apply from: "native.gradle"
+apply from: "maven.gradle"
+
+android {
+
+  compileSdkVersion 26
+
+  defaultConfig {
+    versionName "${clientVersionNumber}"
+    minSdkVersion "${minimumAndroidSdkVersion}"
+    targetSdkVersion "${targetAndroidSdkVersion}"
+    versionCode 1
+    versionName "${clientVersionNumber}"
+  }
+
+  buildTypes {
+    release {
+      minifyEnabled false
+    }
+  }
+
+  sourceSets {
+    main {
+      jniLibs.srcDirs "${rootProject.ext.nativeRootOutputDir}/libs"
+    }
+  }
+
+  clean.dependsOn cleanNative
+
+  preBuild.dependsOn([buildOpenSSL, buildAmalgamation])
+
+  afterEvaluate {
+    android.libraryVariants.all { variant ->
+      variant.javaCompile.dependsOn(buildNative)
+      variant.outputs.each { output ->
+        def outputFile = output.outputFile
+        if (outputFile != null && outputFile.name.endsWith(".aar")) {
+          def versionFileName = "${archivesBaseName}-${clientVersionNumber}.aar"
+          output.outputFileName = versionFileName
+        }
+      }
+    }
+  }
+
+}
