@@ -1,126 +1,75 @@
-.DEFAULT_GOAL := all
-JNI_DIR := ${CURDIR}/jni
-LIBS_DIR := ${CURDIR}/libs
-EXTERNAL_DIR := ${CURDIR}/external
-SQLCIPHER_DIR := ${CURDIR}/external/sqlcipher
-LICENSE := ${CURDIR}/SQLCIPHER_LICENSE
-SQLCIPHER_CFLAGS :=  -DHAVE_USLEEP=1 -DSQLITE_HAS_CODEC \
-	-DSQLITE_DEFAULT_JOURNAL_SIZE_LIMIT=1048576 -DSQLITE_THREADSAFE=1 -DNDEBUG=1 \
-	-DSQLITE_ENABLE_MEMORY_MANAGEMENT=1 -DSQLITE_TEMP_STORE=3 \
-	-DSQLITE_ENABLE_FTS3_BACKWARDS -DSQLITE_ENABLE_LOAD_EXTENSION \
-	-DSQLITE_ENABLE_MEMORY_MANAGEMENT -DSQLITE_ENABLE_COLUMN_METADATA \
-	-DSQLITE_ENABLE_FTS4 -DSQLITE_ENABLE_UNLOCK_NOTIFY -DSQLITE_ENABLE_RTREE \
-	-DSQLITE_SOUNDEX -DSQLITE_ENABLE_STAT3 -DSQLITE_ENABLE_FTS4_UNICODE61 \
-	-DSQLITE_THREADSAFE -DSQLITE_ENABLE_JSON1 -DSQLITE_ENABLE_FTS3_PARENTHESIS \
-	-DSQLITE_ENABLE_STAT4 -DSQLITE_ENABLE_FTS5
+.POSIX:
+.PHONY: init clean distclean build-openssl build publish-local-snapshot \
+	publish-local-release publish-remote-snapshot public-remote-release
+GRADLE = ./gradlew
 
-.PHONY: clean develop-zip release-zip release
-
-init: init-environment build-openssl-libraries
-
-init-environment:
+init:
 	git submodule update --init
-	android update project -p ${CURDIR}
 
-build-openssl-libraries:
-	./build-openssl-libraries.sh
-
-build-amalgamation:
-	cd ${SQLCIPHER_DIR} && \
-	./configure --enable-tempstore=yes \
-		CFLAGS="${SQLCIPHER_CFLAGS}" && \
-	make sqlite3.c
-
-build-java:
-	ant release
-
-build-native:
-	cd ${JNI_DIR} && \
-	ndk-build V=1 --environment-overrides NDK_LIBS_OUT=$(JNI_DIR)/libs \
-		SQLCIPHER_CFLAGS="${SQLCIPHER_CFLAGS}"
-
-clean-java:
-	ant clean
-	rm -rf ${LIBS_DIR}
-
-clean-ndk:
-	-cd ${JNI_DIR} && \
-	ndk-build clean
-
-clean: clean-ndk clean-java
-	-cd ${SQLCIPHER_DIR} && \
-	make clean
-	rm sqlcipher-for-android-*.zip
-
-distclean.old: clean
-	rm -rf ${EXTERNAL_DIR}/android-libs
+clean:
+	$(GRADLE) clean
 
 distclean:
-	rm -rf build.xml
-	rm -rf local.properties
-	rm -rf proguard-project.txt
-	rm -rf bin gen jni/libs libs obj
-	rm -rf ${EXTERNAL_DIR}/android-libs
-	-rm -rf ${EXTERNAL_DIR}/openssl/Makefile
-	-rm -rf ${EXTERNAL_DIR}/openssl/Makefile.bak
-	-rm -rf ${EXTERNAL_DIR}/openssl/apps/CA.pl
-	-rm -rf ${EXTERNAL_DIR}/openssl/apps/md4.c
-	-rm -rf ${EXTERNAL_DIR}/openssl/crypto/buildinf.h
-	-rm -rf ${EXTERNAL_DIR}/openssl/crypto/opensslconf.h
-	-rm -rf ${EXTERNAL_DIR}/openssl/crypto/*.[os]
-	-rm -rf ${EXTERNAL_DIR}/openssl/crypto/*/*.[osS]
-	-rm -rf ${EXTERNAL_DIR}/openssl/crypto/*/lib
-	-rm -rf ${EXTERNAL_DIR}/openssl/crypto/lib
-	-rm -rf ${EXTERNAL_DIR}/openssl/include
-	-rm -rf ${EXTERNAL_DIR}/openssl/test/evptests.txt
-	-rm -rf ${EXTERNAL_DIR}/openssl/test/[bcehjsvw]*.c
-	-rm -rf ${EXTERNAL_DIR}/openssl/test/d[ehs]*.c
-	-rm -rf ${EXTERNAL_DIR}/openssl/test/id*.c
-	-rm -rf ${EXTERNAL_DIR}/openssl/test/md*.c
-	-rm -rf ${EXTERNAL_DIR}/openssl/test/r[a-z]*.c
-	-rm -rf ${EXTERNAL_DIR}/openssl/test/md*.c
-	-rm -rf ${EXTERNAL_DIR}/openssl/tools/c_rehash
-	-rm -rf ${SQLCIPHER_DIR}/fts5*
-	-rm -rf ${SQLCIPHER_DIR}/.target_source
-	-rm -rf ${SQLCIPHER_DIR}/Makefile
-	-rm -rf ${SQLCIPHER_DIR}/*.[hc]
-	-rm -rf ${SQLCIPHER_DIR}/config.log
-	-rm -rf ${SQLCIPHER_DIR}/config.status
-	-rm -rf ${SQLCIPHER_DIR}/lemon
-	-rm -rf ${SQLCIPHER_DIR}/libtool
-	-rm -rf ${SQLCIPHER_DIR}/mkkeywordhash
-	-rm -rf ${SQLCIPHER_DIR}/parse.*
-	-rm -rf ${SQLCIPHER_DIR}/sqlcipher.pc
-	-rm -rf ${SQLCIPHER_DIR}/tsrc
+	$(GRADLE) distclean
 
-copy-libs:
-	cp -R ${JNI_DIR}/libs/* ${LIBS_DIR}
+build-openssl:
+	$(GRADLE) buildOpenSSL
 
-release-aar:
-	-rm ${LIBS_DIR}/sqlcipher.jar
-	-rm ${LIBS_DIR}/sqlcipher-javadoc.jar
-	mvn package
+build:
+	$(GRADLE) android-database-sqlcipher:bundleRelease
 
-develop-zip: LATEST_TAG := $(shell git rev-parse --short HEAD)
-develop-zip: SECOND_LATEST_TAG := $(shell git tag | sort -r | head -1)
-develop-zip: release
+publish-local-snapshot:
+	@ $(collect-signing-info) \
+	$(GRADLE) \
+	-PpublishSnapshot=true \
+	-PpublishLocal=true \
+	-PsigningKeyId="$$gpgKeyId" \
+	-PsigningKeyRingFile="$$gpgKeyRingFile" \
+	-PsigningKeyPassword="$$gpgPassword" \
+	uploadArchives
 
-release-zip: LATEST_TAG := $(shell git tag | sort -r | head -1)
-release-zip: SECOND_LATEST_TAG := $(shell git tag | sort -r | head -2 | tail -1)
-release-zip: release
+publish-local-release:
+	@ $(collect-signing-info) \
+	$(GRADLE) \
+	-PpublishSnapshot=false \
+	-PpublishLocal=true \
+	-PsigningKeyId="$$gpgKeyId" \
+	-PsigningKeyRingFile="$$gpgKeyRingFile" \
+	-PsigningKeyPassword="$$gpgPassword" \
+	uploadArchives
 
-release:
-	$(eval RELEASE_DIR := sqlcipher-for-android-${LATEST_TAG})
-	$(eval README := ${RELEASE_DIR}/README)
-	$(eval CHANGE_LOG_HEADER := "Changes included in the ${LATEST_TAG} release of SQLCipher for Android:")
-	-rm -rf ${RELEASE_DIR}
-	-rm ${RELEASE_DIR}.zip
-	mkdir ${RELEASE_DIR}
-	cp -R ${LIBS_DIR}/* ${RELEASE_DIR}
-	cp ${LICENSE} ${RELEASE_DIR}
-	printf "%s\n\n" ${CHANGE_LOG_HEADER} > ${README}
-	git log --pretty=format:' * %s' ${SECOND_LATEST_TAG}..${LATEST_TAG} >> ${README}
-	find ${RELEASE_DIR} | sort -u | zip -@9 ${RELEASE_DIR}.zip
-	rm -rf ${RELEASE_DIR}
+publish-remote-snapshot:
+	@ $(collect-signing-info) \
+	$(collect-nexus-info) \
+	$(GRADLE) \
+	-PpublishSnapshot=true \
+	-PpublishLocal=false \
+	-PsigningKeyId="$$gpgKeyId" \
+	-PsigningKeyRingFile="$$gpgKeyRingFile" \
+	-PsigningKeyPassword="$$gpgPassword" \
+	-PnexusUsername="$$nexusUsername" \
+	-PnexusPassword="$$nexusPassword" \
+	uploadArchives
 
-all: build-amalgamation build-native build-java copy-libs
+publish-remote-release:
+	@ $(collect-signing-info) \
+	$(collect-nexus-info) \
+	$(GRADLE) \
+	-PpublishSnapshot=false \
+	-PpublishLocal=false \
+	-PsigningKeyId="$$gpgKeyId" \
+	-PsigningKeyRingFile="$$gpgKeyRingFile" \
+	-PsigningKeyPassword="$$gpgPassword" \
+	-PnexusUsername="$$nexusUsername" \
+	-PnexusPassword="$$nexusPassword" \
+	uploadArchives
+
+collect-nexus-info := \
+	read -p "Enter Nexus username:" nexusUsername; \
+	stty -echo; read -p "Enter Nexus password:" nexusPassword; stty echo;
+
+collect-signing-info := \
+	read -p "Enter GPG signing key id:" gpgKeyId; \
+	read -p "Enter full path to GPG keyring file \
+	(possibly ${HOME}/.gnupg/secring.gpg)" gpgKeyRingFile; \
+	stty -echo; read -p "Enter GPG password:" gpgPassword; stty echo;
